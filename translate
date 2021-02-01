@@ -1,0 +1,517 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+require 'optparse'
+
+MYNAME = File.basename($0)
+Version = '1.23'
+
+<<'DOC'
+= translate - translate words or fragments
+
+= Synopsis
+translate [options] [filename]	
+
+== Options:
+-h,--help			print this help and exit
+-H,--Help			print full documentation and exit
+-V,--version			print version and exit
+-c,--comma[=list separator]	string separating the regexps/replacements
+				in the |--old|, |--new| and |--pairs| option;
+				comma initially, empty by default
+-f,--from=filename		file with tab-separated regexps/words
+-i,--inplace[=STRING]		edit files in place
+				if STRING given, save backups with STRING appended
+				STRING must start with . or ~
+-l,--literal			take regexps as literal strings
+-m,--multi			allow multiline expressions
+-n,--new=repl[,repl...]		comma-separated replacements for the regexps
+-o,--old=re[,re...]		comma-separated regexps to be translated
+-p,--pairs=re,repl[,re,repl...]	comma-separated pairs of regexps and their replacements
+-t,--tab[=separator]		separator between regexps/words in |--from| file
+				tab initially and by default
+   --test			do a test run on the script's DATA section
+-v,--verbose			run verbosely
+-w,--word			only translate if matching string occurs
+				between word boundaries
+
+= Description
+In ASCII or UTF-8 encoded texts, translate converts words or text
+fragments into other words or text fragments.
+
+The words/fragments to be translated are given as an array of
+regular expression / translation (regexp,translation) pairs,
+and there are three ways to provide these pairs:
+  
+- with the |--old| and |--new| options, where the
+  |--old| option specifies a comma-separated list of
+  regexps and the |--new| option a list of
+  corresponding translations.
+- with the |--pairs| option, specifying a comma-separated
+  list of regexp,translation,regexp,translation... pairs
+- with the |--from| option, specifying a file containing
+  tab-separated regexp,translation pairs, one pair per line.
+  
+These three alternatives are evaluated in the given order. 
+More details about these options are given in the Options section. 
+
+= Options
+--help	
+	prints help information, then quits.
+--Help	
+	prints full documentation, then quits.
+--version	
+	prints version and then quits.
+--comma=string	
+	If you need to translate from or to comma-containing strings, you can
+	make *translate* to split strings on this <i>string</i>, instead of on
+	comma's. If you set it to an empty string, or use it without an
+	argument, no splitting is performed and the whole
+	|--old| or |--new| string is translated from or to. If you use the
+	--pairs option, it's argument will be split in characters, so that
+	single characters can be converted into another set of single
+	characters.
+--inplace[=string]	
+	Files to be translated are edited in place. If |string| is given, a copy
+	of the original file is saved in a file with same name, with |string|
+	appended; |string| must start with |~| or |.|,
+--from=file	
+	Specifies |file| to contain tab-separated word/fragment - translation
+	pairs, one per line. With the |--tab| option the tab separation
+	character can be changed into another character or string. Translations
+	given on the command line are performed before those given in a file.
+--literal	
+	The regexps are interpreted as normal strings; without it, if you use
+	the option |--pairs 'a+','b+'|, every occurrence of one or more |a|'s
+	will be translated into |b+|. The |--literal| option prevents this - it
+	causes special characters in regexps to be escaped.
+--multi	
+	The expression may contain newline characters. This implies that the
+	file is not handled line by line, but as a whole, which can cause mamory
+	allocation problems for extremaly large files. With the |--literal|
+	option, the sequence |\n| is seen as a newline - it will not be escaped.
+--new=list	
+	Comma separated list of translations for the words/fragments given with
+	the |--old| option. If this list is shorter than the |--old| list,
+	missing translations are set to the empty string, thus effectively
+	deleting the corresponding words/fragments. String to be deleteted must
+	then come at the end of the --old list, of course. Alternatively, you
+	can explicitly use empty strings; for example, remove John and Mary and
+	traslate Pete to Peter: translate --old=John,Pete,Mary --new=,Peter, or,
+	using the --pairs option: translate --pairs=John,,Pete,Peter,Mary,
+--old=list	
+	Comma separated list of strings, which are interpreted as Ruby regexps
+	to be replaced. When the |--literal| option is used, the strings are
+	taken literally, not as regexps.
+--pairs=list	
+	Comma separated list of regexp,translation pairs: a merge of the
+	|--old| and |--new| options.
+--tab=string	
+	Word-pair separator string for word-pairs in the word-pair file. Default
+	is the tab-character.
+--test	
+	Run a test by interpreting the DATA section of the translate script. May
+	be useful to see further examples.
+--verbose	
+	print debugging information.
+--word	
+	translated texts must occur between word boundaries. Word boundaries are
+	characters matching |[a-zA-Z_]| plus line boundaries; thus the command:
+	translate --old=test --word will delete every word "test" but will leave
+	a word like "testing" untouched.
+
+= Examples
+In file.tex, convert |\chapter| to |\section| and |\section| to |\subsection|,
+saving the original in |file.tex~|:
+
+   translate --old='\section,\chapter' \
+           --new='\subsection,\section' \
+           --literal -i~ file.tex
+
+Note the order in which the words are given; reversing the order would turn both
+|\chapter| and |\section| into |\subsection|. The |--literal| option was used
+here, because in a regexp, |\s| would be interpreted as a whitespace character,
+which is clearly not what we want here. As an alternative, the same result can
+be produced without the |--literal| option by escaping the regexp:
+
+   translate --old='\\section,\\chapter' \
+             --new='\\subsection,\\section' \
+             --inplace=.bak file.tex
+
+Exchanging the occurrencies of John and Bill is a little tricky. The following
+would change both to John:
+
+   translate -o John,Bill -n Bill,John testfile
+
+We need an extra pair here:
+
+   translate -o John,Bill,SomeWeirdString -n SomeWeirdString,John,Bill
+
+In standard input, change every occurrence of "John, Bill" into "Anny" and write
+the result to standard output; the comma as a list separator must be changed, or
+eliminated:
+
+   translate --comma --old='John, Bill' --new=Anny
+
+Do the same on many files, inplace, with no backup:
+
+   translate  -o 'John, Bill' -n Anny -ci *.txt
+
+Replace any two consecutive lines in file |file.html| containing:
+
+   </body>
+   </html>
+
+with six lines containing:
+
+	 <!--#include virtual="tail1.inc" --> 
+	 <!--#config timefmt="%Y-%m-%d %X %Z" --> 
+	 <!--#echo var="LAST_MODIFIED" --> 
+	 <!--#include virtual="tail2.inc" --> 
+	 <!-- vim: tw=0 
+	 --> 
+	 
+	 translate -lmi -o '
+	 </body>
+	 </html>
+	 ' -n '
+	 <!--#include virtual="tail1.inc" --> 
+	 <!--#config timefmt="%Y-%m-%d %X %Z" --> 
+	 <!--#echo var="LAST_MODIFIED" --> 
+	 <!--#include virtual="tail2.inc" --> 
+	 <!-- vim: tw=0 
+	 --> 
+	 ' file.html
+
+= Author
+[Wybo Dekker](wybo@dekkerdocumenten.nl)
+
+= Copyright
+Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
+DOC
+
+# defaults
+@tab, @comma, @word, @verbose, @file, @backup_ext, @pairs, @inplace, @literal, @test =
+"\t", ",",    nil,   nil,      nil,   nil,         nil,    nil,      nil,      false
+
+def handle_options
+    ARGV.options do |opt|
+      opt.banner =  "#{MYNAME} - translate a text\n"
+      opt.banner << "Usage: #{MYNAME} [options] [filename]"
+    
+    opt.on('-h','--help',
+      'print this help and exit') do
+        puts opt.to_s.sub(/^ *-I\n/,'')
+        exit
+      end
+    opt.on('-H','--Help',
+      'print full documentation and exit') do
+        system(%Q{
+          sed -n "/^<<'DOC'$/,/^DOC/p" #{MYNAME}|
+          sed '1d;$d'|
+          less -Ps'#{MYNAME}-#{Version.sub(/\./,'·')} (press h for help, q to quit)'
+        })
+        exit
+      end
+    opt.on('-V','--version',
+      'print version and exit') do
+        puts Version
+        exit
+    end
+    opt.on('-c','--comma[=list separator]',String,
+                'string separating the regexps/replacements',
+                'in the --old, --new and --pairs option;',
+                'comma initially, empty by default') do |v|
+                   @comma = v||''
+                 end
+    opt.on('-f','--from=filename',String,
+                'file with tab-separated regexps/words') do |v|
+                   @file = v
+                 end
+    opt.on('-i','--inplace[=STRING]',
+                'edit files in place',
+                "if STRING given, save backups with STRING appended",
+                "STRING must start with . or ~") do |v|
+                   (v||'.') =~ /^[~.]/ or quit "argument for --inplace option (#{v}) does not start with ~ or ."
+                   @inplace = v || ''
+                 end
+    opt.on('-l','--literal',
+                'take regexps as literal strings') do
+                   @literal = true
+                 end
+    opt.on('-m','--multi','allow multiline expressions') do
+                   @multi = true
+                 end
+    opt.on('-n','--new=repl[,repl...]',Object, # use Object, because arg may be empty string
+                'comma-separated replacements for the regexps') do |v|
+                   @new = v
+                 end
+    opt.on('-o','--old=re[,re...]',String,
+                'comma-separated regexps to be translated') do |v|
+                   @old = v
+                 end
+    opt.on('-p','--pairs=re,repl[,re,repl...]',String,
+                'comma-separated pairs of regexps and their replacements') do |v|
+                   @pairs = v
+                 end
+    opt.on('-t','--tab[=separator]',String,
+                'separator between regexps/words in --from file',
+                'tab initially and by default') do |v|
+                   @tab = v||"\t"
+                 end
+    opt.on('--test','do a test run on the script\'s DATA section') do @test = true end
+    opt.on('-v','--verbose','run verbosely') do
+                   @verbose = true
+                 end
+    opt.on('-w','--word',
+                'only translate if matching string occurs',
+                'between word boundaries') do
+                   @word = true
+                 end
+    opt.on('-I') do system("instscript #{MYNAME}"); exit 0; end
+    opt.parse!
+  end or quit("Error parsing options")
+end
+
+class String
+  # convert string to regexp, but escape it if LIT
+  def to_re
+    e = self
+    if LIT
+      if MULTI
+        e = e.split(/\\n/).map { |x| Regexp.escape(x) }.join("\n")
+      else
+        e = Regexp.escape(e)
+      end
+    end
+    e = '(\b)' + e + '(\b)' if WORD
+    Regexp.new(e)
+  end
+end
+
+def quit(m,exitvalue=1)
+  puts m
+  exit(exitvalue)
+end
+
+# read lines, convert them, and print
+def cv(handler,old,new,inplace=false)
+  quit(<<-EOF) if handler == STDIN && inplace
+    You cannot use --inplace (-i) on standard input
+      ( you may have made me think that your file is
+        the argument for the --inplace option; so perhaps
+        you should use --inplace as the first option)
+  EOF
+  a = handler.readlines(@multi ? nil : "\n")
+  out = STDOUT
+  if inplace
+    handler.rewind
+    handler.truncate(0)
+    out = handler
+    if !inplace.empty?
+      open(handler.path + inplace,'w') { |o| o.print a }
+    end
+  end
+  a.each do |line|
+    line
+    0.upto(old.size-1) do |i|
+      begin
+        line.gsub!(old[i],new[i])
+      rescue
+        quit('Your text is not ASCII or UTF-8 encoded - convert first; skipping')
+      end
+    end
+    out.print line
+  end
+  out.close
+end
+
+MD = ARGV.dup.unshift(MYNAME).join(' ')
+handle_options
+WORD = @word
+ LIT = @literal
+MULTI = @multi
+
+if @test
+  require 'tempfile'
+  $/,input,ok,output,words = "===EOF\n"
+  %w{input ok words output}.each do |f|
+    file = Tempfile.new(f)
+    file.puts DATA.gets.chomp
+    file.close
+    eval "#{f} = '#{file.path}'"
+  end
+  $/ = "\n"
+  s = <<'EOF'
+  ./tran --old John,Daisy --new Neill,Margareth __input >__output
+  ./tran -i  -l -o '\section','\chapter' -n '\subsection','\section' __output
+  ./tran --inplace --old Neill,Margareth --new John,Daisy __output
+  ./tran --inplace --word --old test --new last __output
+  ./tran --inplace --literal --old '$25' --new '\\EUR30' __output
+  ./tran --inplace --literal --old a+,b+ --new x+,y+ __output
+  ./tran --inplace --from=__words __output
+  ./tran --inplace --literal --multi --old "operating\nsystem" --new "xxx" __output
+  ./tran --i -p something,,anything, __output
+  diff __output __ok && echo Congratulations: no problems detected || echo Oops\! - I saw differences\!
+EOF
+  %w{input ok words output}.each do |f| s.gsub!(/__#{f}/m,eval(f)) end
+  s.gsub!(/\.\/tran/,$0)
+  system(s)
+  exit 0
+end
+
+old = Array.new
+new = Array.new
+# regexp/replacement pairs defined with --old/--new options:
+old = @old.split(@comma) if @old
+new = @new.split(@comma) if @new
+quit("--new option defines more elements than the --old option") if new.size > old.size
+new.push('') while new.size < old.size
+
+# regexp/replacement pairs defined with --pairs option:
+if @pairs
+  pairs = @pairs.split(@comma)
+  pairs.push('') if @pairs =~ /#{@comma}$/
+  quit("pairs (#{pairs.inspect}) has odd number of elements") if pairs.size % 2 > 0
+  while !pairs.empty?
+    old.push(pairs.shift)
+    new.push(pairs.shift)
+  end
+end
+
+# regexp/replacement pairs defined in a file
+if @file
+  open(@file) do |f|
+    f.readlines.each do |l|
+      l.chomp!
+      next if l.empty?
+      o,n = l.split(@tab)
+      quit("more than 2 fields in #{@file}") if n.class == Array
+      old.push(o)
+      new.push(n||'')
+    end
+  end || quit("Could not open word pair file #{file}")
+end
+
+# escape regexps if literal option was used
+old.map! { |r| r.to_re }
+if @verbose
+    0.upto(old.size-1) do |i|
+      STDERR.puts("#{old[i].inspect} => #{new[i].inspect}")
+    end
+end
+
+if ARGV.empty?
+  STDERR.puts "Converting standard input" if @verbose
+  cv(STDIN,old,new,@inplace)
+else
+  ARGV.each do |f|
+    unless File.file?(f) 
+      STDERR.puts("#{f} is not a regular file; skipping")
+      next
+    end
+    if @inplace && ! File.writable?(f)
+      STDERR.puts("#{f} is not writable; skipping")
+      next
+    end
+    unless `file --mime-encoding #{f}` =~ /us-ascii|utf-8/ 
+      STDERR.puts("#{f} is not ASCII or UTF-8 encoded - convert first; skipping")
+      next
+    end
+    STDERR.puts "Converting #{f}" if @verbose
+    handler = File.new(f,"r+")
+    cv(handler,old,new,@inplace)
+  end
+end
+__END__
+This is a test text for
+translate. It contains the
+names of John and Daisy, who
+will be replaced with Neill and
+Margareth and back again.
+
+If we want \chapter and \section
+to be replaced with \section and
+\subsection, chapter and section
+should not be replaced with 
+section and subsection.
+
+Translate should also be able
+to translate words containing
+regexp symbols, without too
+much trouble, such as a+ and b+
+into x+ and y+
+
+Of course, one should protect 
+characters like $ and \ on the 
+commandline that would otherwise
+be changed by the operating
+system. So type '$25', not $25
+and '\\EUR', not \EUR
+
+With the --word option the
+translation is restricted to
+full words, so that test may be
+replaced with last, without
+replacing testing into lasting.
+
+String replacements may be empty strings.
+So we can remove 'something' with:
+-o something -n ''
+or we remove both 'something' and 'anything' with:
+-p something,,anything,
+
+Here we translate some words 
+from english into dutch:
+hello
+dutchman
+ship
+
+===EOF
+This is a last text for
+translate. It contains the
+names of John and Daisy, who
+will be replaced with John and
+Daisy and back again.
+
+If we want \section and \subsection
+to be replaced with \subsection and
+\subsection, chapter and section
+should not be replaced with 
+section and subsection.
+
+Translate should also be able
+to translate words containing
+regexp symbols, without too
+much trouble, such as x+ and y+
+into x+ and y+
+
+Of course, one should protect 
+characters like $ and \ on the 
+commandline that would otherwise
+be changed by the xxx. So type '\EUR30', not \EUR30
+and '\\EUR', not \EUR
+
+With the --word option the
+translation is restricted to
+full words, so that last may be
+replaced with last, without
+replacing testing into lasting.
+
+String replacements may be empty strings.
+So we can remove '' with:
+-o  -n ''
+or we remove both '' and '' with:
+-p ,,,
+
+Here we translate some words 
+from english into dutch:
+hallo
+nederlander
+schip
+
+===EOF
+hello	hallo
+dutchman	nederlander
+ship	schip
+===EOF
+===EOF
