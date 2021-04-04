@@ -194,17 +194,16 @@ DOC
 "\t", ",",    nil,   nil,      nil,   nil,         nil,    nil,      nil,      false
 
 def handle_options
-    ARGV.options do |opt|
-      opt.banner =  "#{MYNAME} - translate a text\n"
-      opt.banner << "Usage: #{MYNAME} [options] [filename]"
-    
-    opt.on('-h','--help',
-      'print this help and exit') do
-        puts opt.to_s.sub(/^ *-I\n/,'')
-        exit
-      end
-    opt.on('-H','--Help',
-      'print full documentation and exit') do
+    ARGV.options do |opts|
+      opts.banner =  "#{MYNAME} - translate a text\n"
+      opts.banner << "Usage: #{MYNAME} [options] [filename]"
+      opts.summary_width=25
+      opts.summary_indent='  '
+
+      opts.on('-h','print this help and exit') do
+         quit opts.to_a.delete_if { |x| x =~ /—$/},0
+      end   
+    opts.on(     '--help','print full documentation and exit') do
         system(%Q{
           sed -n "/^<<'DOC'$/,/^DOC/p" #{MYNAME}|
           sed '1d;$d'|
@@ -212,64 +211,67 @@ def handle_options
         })
         exit
       end
-    opt.on('-V','--version',
-      'print version and exit') do
+    opts.on('-V','--version','print version and exit') do
         puts Version
         exit
     end
-    opt.on('-c','--comma[=list separator]',String,
+    opts.on('-c','--comma[=list separator]',String,
                 'string separating the regexps/replacements',
                 'in the --old, --new and --pairs option;',
                 'comma initially, empty by default') do |v|
                    @comma = v||''
                  end
-    opt.on('-f','--from=filename',String,
+    opts.on('-f','--from=filename',String,
                 'file with tab-separated regexps/words') do |v|
                    @file = v
                  end
-    opt.on('-i','--inplace[=STRING]',
+    opts.on('-i','--inplace[=STRING]',
                 'edit files in place',
                 "if STRING given, save backups with STRING appended",
                 "STRING must start with . or ~") do |v|
-                   (v||'.') =~ /^[~.]/ or quit "argument for --inplace option (#{v}) does not start with ~ or ."
+                   (v||'.') =~ /^[~.]/ or
+		   quit "argument for --inplace option (#{v}) does not start with ~ or ."
                    @inplace = v || ''
                  end
-    opt.on('-l','--literal',
+    opts.on('-l','--literal',
                 'take regexps as literal strings') do
                    @literal = true
                  end
-    opt.on('-m','--multi','allow multiline expressions') do
+    opts.on('-m','--multi','allow multiline expressions') do
                    @multi = true
                  end
-    opt.on('-n','--new=repl[,repl...]',Object, # use Object, because arg may be empty string
+    opts.on('-n','--new=repl[,repl...]',Object,
+		# use Object, because arg may be empty string
                 'comma-separated replacements for the regexps') do |v|
                    @new = v
                  end
-    opt.on('-o','--old=re[,re...]',String,
+    opts.on('-o','--old=re[,re...]',String,
                 'comma-separated regexps to be translated') do |v|
                    @old = v
                  end
-    opt.on('-p','--pairs=re,repl[,re,repl...]',String,
+    opts.on('-p','--pairs=re,repl[,re,repl...]',String,
                 'comma-separated pairs of regexps and their replacements') do |v|
                    @pairs = v
                  end
-    opt.on('-t','--tab[=separator]',String,
+    opts.on('-t','--tab[=separator]',String,
                 'separator between regexps/words in --from file',
                 'tab initially and by default') do |v|
                    @tab = v||"\t"
                  end
-    opt.on('--test','do a test run on the script\'s DATA section') do @test = true end
-    opt.on('-v','--verbose','run verbosely') do
+    opts.on('--test','do a test run on the script\'s DATA section') do
+		   @test = true
+		 end
+    opts.on('-v','--verbose','run verbosely') do
                    @verbose = true
                  end
-    opt.on('-w','--word',
+    opts.on('-w','--word',
                 'only translate if matching string occurs',
                 'between word boundaries') do
                    @word = true
                  end
-    opt.on('-I') do system("instscript #{MYNAME}"); exit 0; end
-    opt.parse!
-  end or quit("Error parsing options")
+    opts.on('-I') do system("instscript #{MYNAME}"); exit 0; end
+    opts.parse!
+  end or exit 1
 end
 
 class String
