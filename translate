@@ -2,9 +2,10 @@
 # encoding: utf-8
 require 'optparse'
 
-MYNAME = File.basename($0)
+Myname = File.basename($0)
 Version = '1.23'
 
+Help=
 <<'DOC'
 = translate - translate words or fragments
 
@@ -12,8 +13,8 @@ Version = '1.23'
 translate [options] [filename]	
 
 == Options:
--h,--help			print this help and exit
--H,--Help			print full documentation and exit
+-h				print this help and exit
+-H,--help			print full documentation and exit
 -V,--version			print version and exit
 -c,--comma[=list separator]	string separating the regexps/replacements
 				in the |--old|, |--new| and |--pairs| option;
@@ -55,11 +56,11 @@ These three alternatives are evaluated in the given order.
 More details about these options are given in the Options section. 
 
 = Options
---help	
+-h	
 	prints help information, then quits.
---Help	
+-H,--help	
 	prints full documentation, then quits.
---version	
+-V,--version	
 	prints version and then quits.
 --comma=string	
 	If you need to translate from or to comma-containing strings, you can
@@ -193,22 +194,24 @@ DOC
 @tab, @comma, @word, @verbose, @file, @backup_ext, @pairs, @inplace, @literal, @test =
 "\t", ",",    nil,   nil,      nil,   nil,         nil,    nil,      nil,      false
 
+def die(m)
+   STDERR.puts "[38;5;1m#{Myname}: #{m}"
+   exit 1
+end
+
 def handle_options
     ARGV.options do |opts|
-      opts.banner =  "#{MYNAME} - translate a text\n"
-      opts.banner << "Usage: #{MYNAME} [options] [filename]"
+      opts.banner =  "#{Myname} - translate a text\n"
+      opts.banner << "Usage: #{Myname} [options] [filename]"
       opts.summary_width=25
       opts.summary_indent='  '
 
       opts.on('-h','print this help and exit') do
-         quit opts.to_a.delete_if { |x| x =~ /—$/},0
+         puts opts.to_a.delete_if { |x| x =~ /—$/}
+	 exit
       end   
-    opts.on(     '--help','print full documentation and exit') do
-        system(%Q{
-          sed -n "/^<<'DOC'$/,/^DOC/p" #{MYNAME}|
-          sed '1d;$d'|
-          less -Ps'#{MYNAME}-#{Version.sub(/\./,'·')} (press h for help, q to quit)'
-        })
+    opts.on('-H','--help','print full documentation and exit') do
+        help
         exit
       end
     opts.on('-V','--version','print version and exit') do
@@ -230,7 +233,7 @@ def handle_options
                 "if STRING given, save backups with STRING appended",
                 "STRING must start with . or ~") do |v|
                    (v||'.') =~ /^[~.]/ or
-		   quit "argument for --inplace option (#{v}) does not start with ~ or ."
+		   die "argument for --inplace option (#{v}) does not start with ~ or ."
                    @inplace = v || ''
                  end
     opts.on('-l','--literal',
@@ -269,7 +272,7 @@ def handle_options
                 'between word boundaries') do
                    @word = true
                  end
-    opts.on('-I') do system("instscript #{MYNAME}"); exit 0; end
+    opts.on('-I') do system("instscript #{Myname}"); exit 0; end
     opts.parse!
   end or exit 1
 end
@@ -290,14 +293,9 @@ class String
   end
 end
 
-def quit(m,exitvalue=1)
-  puts m
-  exit(exitvalue)
-end
-
 # read lines, convert them, and print
 def cv(handler,old,new,inplace=false)
-  quit(<<-EOF) if handler == STDIN && inplace
+  die(<<-EOF) if handler == STDIN && inplace
     You cannot use --inplace (-i) on standard input
       ( you may have made me think that your file is
         the argument for the --inplace option; so perhaps
@@ -310,7 +308,7 @@ def cv(handler,old,new,inplace=false)
     handler.truncate(0)
     out = handler
     if !inplace.empty?
-      open(handler.path + inplace,'w') { |o| o.print a }
+      open(handler.path + inplace,'w') { |o| o.puts a }
     end
   end
   a.each do |line|
@@ -319,7 +317,7 @@ def cv(handler,old,new,inplace=false)
       begin
         line.gsub!(old[i],new[i])
       rescue
-        quit('Your text is not ASCII or UTF-8 encoded - convert first; skipping')
+        die('Your text is not ASCII or UTF-8 encoded - convert first; skipping')
       end
     end
     out.print line
@@ -327,7 +325,7 @@ def cv(handler,old,new,inplace=false)
   out.close
 end
 
-MD = ARGV.dup.unshift(MYNAME).join(' ')
+MD = ARGV.dup.unshift(Myname).join(' ')
 handle_options
 WORD = @word
  LIT = @literal
@@ -366,14 +364,14 @@ new = Array.new
 # regexp/replacement pairs defined with --old/--new options:
 old = @old.split(@comma) if @old
 new = @new.split(@comma) if @new
-quit("--new option defines more elements than the --old option") if new.size > old.size
+die("--new option defines more elements than the --old option") if new.size > old.size
 new.push('') while new.size < old.size
 
 # regexp/replacement pairs defined with --pairs option:
 if @pairs
   pairs = @pairs.split(@comma)
   pairs.push('') if @pairs =~ /#{@comma}$/
-  quit("pairs (#{pairs.inspect}) has odd number of elements") if pairs.size % 2 > 0
+  die("pairs (#{pairs.inspect}) has odd number of elements") if pairs.size % 2 > 0
   while !pairs.empty?
     old.push(pairs.shift)
     new.push(pairs.shift)
@@ -387,11 +385,11 @@ if @file
       l.chomp!
       next if l.empty?
       o,n = l.split(@tab)
-      quit("more than 2 fields in #{@file}") if n.class == Array
+      die("more than 2 fields in #{@file}") if n.class == Array
       old.push(o)
       new.push(n||'')
     end
-  end || quit("Could not open word pair file #{file}")
+  end || die("Could not open word pair file #{file}")
 end
 
 # escape regexps if literal option was used
